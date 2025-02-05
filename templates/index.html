@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>数据分类分级</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script defer src="https://use.fontawesome.com/releases/v5.15.4/js/all.js"></script>
+    <!-- 添加 marked.js 用于解析 markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 添加 markdown 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css">
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title has-text-centered">敏感数据分类分级示例</h1>
+            
+            <div class="box">
+                <div class="field">
+                    <div class="control">
+                        <textarea id="input-text" class="textarea" placeholder="请输入要分类的数据..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <div class="control">
+                        <button id="submit-btn" class="button is-primary" onclick="classifyData()">
+                            <span class="icon">
+                                <i class="fas fa-check"></i>
+                            </span>
+                            <span>分析</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading" class="is-hidden has-text-centered">
+                <div class="button is-loading is-white">加载中</div>
+            </div>
+
+            <div class="box">
+                <div id="time-info" class="is-size-7 has-text-grey mb-2"></div>
+                <div class="tabs is-boxed">
+                    <ul>
+                        <li class="is-active" data-target="markdown-view">
+                            <a>
+                                <span class="icon"><i class="fas fa-file-alt"></i></span>
+                                <span>分析结果</span>
+                            </a>
+                        </li>
+                        <li data-target="json-view">
+                            <a>
+                                <span class="icon"><i class="fas fa-code"></i></span>
+                                <span>原始JSON</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div id="markdown-view" class="content markdown-body"></div>
+                <div id="json-view" class="is-hidden">
+                    <pre><code class="json" id="result"></code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // 添加标签切换功能
+        document.querySelectorAll('.tabs li').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // 更新标签状态
+                document.querySelectorAll('.tabs li').forEach(t => t.classList.remove('is-active'));
+                tab.classList.add('is-active');
+                
+                // 更新内容显示
+                const target = tab.dataset.target;
+                document.getElementById('markdown-view').classList.toggle('is-hidden', target !== 'markdown-view');
+                document.getElementById('json-view').classList.toggle('is-hidden', target !== 'json-view');
+            });
+        });
+
+        async function classifyData() {
+            const submitBtn = document.getElementById('submit-btn');
+            const loading = document.getElementById('loading');
+            const timeInfo = document.getElementById('time-info');
+            const text = document.getElementById('input-text').value;
+            const resultElement = document.getElementById('result');
+            const markdownView = document.getElementById('markdown-view');
+
+            // 禁用按钮和输入
+            submitBtn.classList.add('is-loading');
+            submitBtn.disabled = true;
+            document.getElementById('input-text').disabled = true;
+            loading.classList.remove('is-hidden');
+            
+            const startTime = new Date();
+
+            try {
+                const response = await fetch('/classify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                
+                const endTime = new Date();
+                const timeDiff = Math.round((endTime - startTime) / 1000); // 秒
+                const minutes = Math.floor(timeDiff / 60);
+                const seconds = timeDiff % 60;
+                timeInfo.textContent = `用时：${minutes}分${seconds}秒`;
+                
+                const data = await response.json();
+                if (response.ok) {
+                    // 显示完整JSON
+                    resultElement.textContent = JSON.stringify(data, null, 2);
+                    hljs.highlightElement(resultElement);
+                    
+                    // 提取并显示markdown内容
+                    const markdownContent = data.message?.content || '无返回内容';
+                    markdownView.innerHTML = marked.parse(markdownContent);
+                    
+                    // 默认显示markdown视图
+                    document.querySelector('[data-target="markdown-view"]').click();
+                } else {
+                    throw new Error(data.error || '请求失败');
+                }
+            } catch (error) {
+                resultElement.textContent = '发生错误: ' + error.message;
+                markdownView.innerHTML = '<p class="has-text-danger">发生错误: ' + error.message + '</p>';
+                timeInfo.textContent = '';
+            } finally {
+                // 恢复按钮和输入状态
+                submitBtn.classList.remove('is-loading');
+                submitBtn.disabled = false;
+                document.getElementById('input-text').disabled = false;
+                loading.classList.add('is-hidden');
+            }
+        }
+    </script>
+</body>
+</html>
